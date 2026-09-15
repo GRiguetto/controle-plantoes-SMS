@@ -20,6 +20,10 @@ switch ($acao) {
         acaoBuscar();
         break;
 
+    case 'criar':
+        acaoCriar();
+        break;
+
     case 'alterar_senha':
         acaoAlterarSenha();
         break;
@@ -140,6 +144,108 @@ function acaoBuscar(): void
     $stmt->execute(['termo1' => $termoBusca, 'termo2' => $termoBusca, 'termo3' => $termoBusca]);
 
     responder(true, $stmt->fetchAll());
+}
+
+/**
+ * Administrador cria um usuário diretamente (sem passar pelo cadastro público),
+ * com uma senha provisória gerada pelo sistema.
+ *
+ * Observação: o envio da senha provisória por e-mail não está implementado —
+ * por ora ela retorna na própria resposta para o administrador repassar
+ * manualmente ao usuário.
+ */
+function acaoCriar(): void
+{
+    exigirPerfil(['administrador']);
+    $dados = corpoRequisicaoJson();
+
+    $nome        = trim((string)($dados['nome_completo'] ?? ''));
+    $matricula   = trim((string)($dados['matricula'] ?? ''));
+    $perfil      = (string)($dados['perfil'] ?? '');
+    $email       = trim((string)($dados['email'] ?? ''));
+    $idsUnidades = $dados['id_unidades'] ?? [];
+
+    if ($nome === '' || $matricula === '' || $email === '') {
+        responder(false, null, 'Preencha nome, matrícula e e-mail.', 422);
+    }
+
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        responder(false, null, 'E-mail inválido.', 422);
+    }
+
+    if (!in_array($perfil, ['funcionario', 'gerente', 'administrador'], true)) {
+        responder(false, null, 'Perfil inválido.', 422);
+    }
+
+    if (!is_array($idsUnidades) || count($idsUnidades) === 0) {
+        responder(false, null, 'Selecione ao menos uma unidade.', 422);
+    }
+
+    // Regra de negócio (ver comentário em sql/schema.sql): gerente fica
+    // restrito a uma única unidade.
+    if ($perfil === 'gerente' && count($idsUnidades) > 1) {
+        responder(false, null, 'Um gerente pode estar vinculado a apenas uma unidade.', 422);
+    }
+
+    $senhaProvisoria = gerarSenhaProvisoria();
+
+    $pdo = conexaoBanco();
+    $pdo->beginTransaction();
+
+    try {
+        $stmt = $pdo->prepare(
+            'INSERT INTO usuarios (nome_completo, matricula, email, senha_hash, perfil)
+             VALUES (:nome, :matricula, :email, :senha_hash, :perfil)'
+        );
+        $stmt->execute([
+            'nome'       => $nome,
+            'matricula'  => $matricula,
+            'email'      => $email,
+            'senha_hash' => password_hash($senhaProvisoria, PASSWORD_DEFAULT),
+            'perfil'     => $perfil,
+        ]);
+
+        $idUsuario = (int) $pdo->lastInsertId();
+
+        $stmtVinculo = $pdo->prepare(
+            'INSERT INTO usuario_unidade (id_usuario, id_unidade) VALUES (:id_usuario, :id_unidade)'
+        );
+        foreach ($idsUnidades as $idUnidade) {
+            $stmtVinculo->execute([
+                'id_usuario' => $idUsuario,
+                'id_unidade' => (int) $idUnidade,
+            ]);
+        }
+
+        $pdo->commit();
+    } catch (PDOException $e) {
+        $pdo->rollBack();
+
+        if ($e->getCode() === '23000') {
+            responder(false, null, 'Matrícula ou e-mail já cadastrados.', 409);
+        }
+
+        throw $e; // deixa o handler global formatar a resposta JSON
+    }
+
+    responder(true, [
+        'id_usuario'       => $idUsuario,
+        'senha_provisoria' => $senhaProvisoria,
+    ], 'Usuário criado com sucesso.', 201);
+}
+
+/** Gera uma senha provisória legível (ex: "TB47-KXQ2"), fácil de repassar manualmente. */
+function gerarSenhaProvisoria(): string
+{
+    $alfabeto = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sem O/0/I/1 p/ evitar confusão
+    $bloco = function () use ($alfabeto) {
+        $s = '';
+        for ($i = 0; $i < 4; $i++) {
+            $s .= $alfabeto[random_int(0, strlen($alfabeto) - 1)];
+        }
+        return $s;
+    };
+    return $bloco() . '-' . $bloco();
 }
 
 /** Administrador altera a senha de qualquer usuário. */
