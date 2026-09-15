@@ -109,8 +109,12 @@
           <h2 style="font-size: var(--font-size-h2); margin-top:4px; margin-bottom:12px;">Exportar resultado filtrado</h2>
           <div style="display:flex; gap:10px; flex-wrap:wrap;">
             <a class="btn btn-outline" href="#" id="link-exportar-csv">CSV</a>
-            <a class="btn btn-outline" href="#" id="link-exportar-xlsx" title="Ainda não implementado no back-end">XLSX</a>
-            <a class="btn btn-outline" href="#" id="link-exportar-pdf" title="Ainda não implementado no back-end">PDF</a>
+            <!-- XLSX e PDF temporariamente ocultos: exigem PhpSpreadsheet/Dompdf via
+                 Composer, que não está instalando nesta máquina (erro de rede/TLS
+                 no cURL do PHP, provavelmente antivírus corporativo). Reativar
+                 removendo o "display:none" assim que o Composer for resolvido. -->
+            <a class="btn btn-outline" href="#" id="link-exportar-xlsx" title="Ainda não implementado no back-end" style="display:none;">XLSX</a>
+            <a class="btn btn-outline" href="#" id="link-exportar-pdf" title="Ainda não implementado no back-end" style="display:none;">PDF</a>
           </div>
         </div>
       </main>
