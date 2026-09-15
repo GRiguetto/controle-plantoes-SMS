@@ -279,8 +279,6 @@
     document.getElementById('form-novo-usuario').addEventListener('submit', async (ev) => {
       ev.preventDefault();
 
-      // TODO: implementar endpoint api/usuarios.php?acao=criar (admin cria usuário
-      // diretamente, com senha provisória enviada por e-mail, por exemplo).
       const payload = {
         nome_completo: document.getElementById('novo-nome').value,
         matricula: document.getElementById('novo-matricula').value,
@@ -290,12 +288,19 @@
       };
 
       const resp = await apiFetch('usuarios.php?acao=criar', payload);
-      exibirMensagem('mensagem-novo-usuario', resp.mensagem, resp.sucesso ? 'sucesso' : 'erro');
 
-      if (resp.sucesso) {
-        document.getElementById('modal-novo-usuario').classList.remove('ativo');
-        buscarUsuarios(document.getElementById('input-busca-usuario').value);
+      if (!resp.sucesso) {
+        exibirMensagem('mensagem-novo-usuario', resp.mensagem, 'erro');
+        return;
       }
+
+      exibirMensagem(
+        'mensagem-novo-usuario',
+        `Usuário criado. Senha provisória: ${resp.dados.senha_provisoria} (repasse ao usuário e peça para trocá-la em "Meu perfil").`,
+        'sucesso'
+      );
+
+      buscarUsuarios(document.getElementById('input-busca-usuario').value);
     });
 
     (async function inicializar() {
