@@ -22,6 +22,13 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/bootstrap.php';
 
+// ------------------------------------------------------------
+// Corte diurno/noturno (regra de negócio). Ajustar aqui se a
+// secretaria adotar outro horário de corte.
+// ------------------------------------------------------------
+const HORA_INICIO_DIURNO   = 7;  // 07:00
+const HORA_INICIO_NOTURNO  = 19; // 19:00
+
 $acao = $_GET['acao'] ?? '';
 
 switch ($acao) {
@@ -43,6 +50,14 @@ switch ($acao) {
 
     case 'historico':
         acaoHistorico();
+        break;
+
+    case 'kpis':
+        acaoKpis();
+        break;
+
+    case 'cancelar':
+        acaoCancelar();
         break;
 
     default:
@@ -89,15 +104,34 @@ function acaoRegistrarPlantao(): void
         $stmtPausa = $pdo->prepare(
             'INSERT INTO pausas (id_plantao, inicio_pausa, fim_pausa) VALUES (:id_plantao, :inicio, :fim)'
         );
+        $pausasValidas = [];
         foreach ($pausas as $pausa) {
             $inicio = $pausa['inicio'] ?? null;
             if (!$inicio) {
                 continue; // ignora linhas de pausa vazias enviadas pelo formulário
             }
+            $fim = $pausa['fim'] ?? null;
             $stmtPausa->execute([
                 'id_plantao' => $idPlantao,
                 'inicio'     => $inicio,
-                'fim'        => $pausa['fim'] ?? null,
+                'fim'        => $fim,
+            ]);
+            $pausasValidas[] = ['inicio' => $inicio, 'fim' => $fim];
+        }
+
+        // Só é possível calcular horas diurnas/noturnas quando a saída já
+        // foi informada no ato do registro. Quando saída ficar em aberto,
+        // o cálculo pode ser plugado depois (ex: ao registrar a saída ou
+        // ao aprovar o plantão).
+        if ($saida) {
+            [$horasDiurnas, $horasNoturnas] = calcularHorasDiaNoite($entrada, $saida, $pausasValidas);
+
+            $pdo->prepare(
+                'UPDATE plantoes SET horas_diurnas = :diurnas, horas_noturnas = :noturnas WHERE id_plantao = :id'
+            )->execute([
+                'diurnas'  => $horasDiurnas,
+                'noturnas' => $horasNoturnas,
+                'id'       => $idPlantao,
             ]);
         }
 
@@ -108,6 +142,76 @@ function acaoRegistrarPlantao(): void
     }
 
     responder(true, ['id_plantao' => $idPlantao], 'Plantão registrado. Aguardando avaliação.', 201);
+}
+
+/**
+ * Calcula quantas horas do intervalo entrada→saída caem no período diurno
+ * e quantas caem no período noturno (conforme HORA_INICIO_DIURNO /
+ * HORA_INICIO_NOTURNO), descontando os intervalos de pausa informados.
+ *
+ * Retorna [horas_diurnas, horas_noturnas] arredondadas em 2 casas decimais.
+ */
+function calcularHorasDiaNoite(string $entrada, string $saida, array $pausas): array
+{
+    try {
+        $inicio = new DateTime($entrada);
+        $fim    = new DateTime($saida);
+    } catch (Exception $e) {
+        return [null, null];
+    }
+
+    if ($fim <= $inicio) {
+        return [null, null]; // dados inconsistentes; não classifica
+    }
+
+    [$diurnoMin, $noturnoMin] = contarMinutosPorTurno($inicio, $fim);
+
+    // Desconta as pausas (proporcionalmente ao turno em que cada minuto de pausa ocorreu)
+    foreach ($pausas as $pausa) {
+        if (empty($pausa['inicio']) || empty($pausa['fim'])) {
+            continue; // pausa sem os dois horários não entra no desconto
+        }
+        try {
+            $pInicio = new DateTime($pausa['inicio']);
+            $pFim    = new DateTime($pausa['fim']);
+        } catch (Exception $e) {
+            continue;
+        }
+        if ($pFim <= $pInicio) {
+            continue;
+        }
+        [$pDiurno, $pNoturno] = contarMinutosPorTurno($pInicio, $pFim);
+        $diurnoMin  = max(0, $diurnoMin - $pDiurno);
+        $noturnoMin = max(0, $noturnoMin - $pNoturno);
+    }
+
+    return [
+        round($diurnoMin / 60, 2),
+        round($noturnoMin / 60, 2),
+    ];
+}
+
+/**
+ * Conta, minuto a minuto, quantos minutos de um intervalo caem no turno
+ * diurno e quantos caem no turno noturno.
+ */
+function contarMinutosPorTurno(DateTime $inicio, DateTime $fim): array
+{
+    $diurno  = 0;
+    $noturno = 0;
+
+    $cursor = clone $inicio;
+    while ($cursor < $fim) {
+        $hora = (int) $cursor->format('H');
+        if ($hora >= HORA_INICIO_DIURNO && $hora < HORA_INICIO_NOTURNO) {
+            $diurno++;
+        } else {
+            $noturno++;
+        }
+        $cursor->modify('+1 minute');
+    }
+
+    return [$diurno, $noturno];
 }
 
 /** Gerente lista pedidos pendentes da sua unidade. */
@@ -298,6 +402,92 @@ function acaoHistorico(): void
         'total_paginas'  => (int) ceil($total / $porPagina),
         'registros'      => $stmt->fetchAll(),
     ]);
+}
+
+/**
+ * KPIs de horas do mês corrente para o funcionário logado:
+ * aceitas (total), diurnas, noturnas (ambas apenas de plantões aceitos),
+ * negadas e pendentes (total de horas nesses status).
+ *
+ * Observação: plantões sem "saída" preenchida ainda não têm horas
+ * calculadas (horas_diurnas/horas_noturnas ficam NULL) — por isso entram
+ * como 0h no KPI até que a saída seja registrada.
+ */
+function acaoKpis(): void
+{
+    $usuario = exigirAutenticacao();
+
+    $ano = (int) date('Y');
+    $mes = (int) date('m');
+
+    $pdo = conexaoBanco();
+    $stmt = $pdo->prepare(
+        "SELECT status,
+                COALESCE(SUM(horas_diurnas), 0)  AS soma_diurnas,
+                COALESCE(SUM(horas_noturnas), 0) AS soma_noturnas
+         FROM plantoes
+         WHERE id_usuario = :id_usuario
+           AND YEAR(data_plantao) = :ano
+           AND MONTH(data_plantao) = :mes
+         GROUP BY status"
+    );
+    $stmt->execute([
+        'id_usuario' => $usuario['id_usuario'],
+        'ano'        => $ano,
+        'mes'        => $mes,
+    ]);
+
+    $porStatus = [
+        'aceito'   => ['soma_diurnas' => 0, 'soma_noturnas' => 0],
+        'negado'   => ['soma_diurnas' => 0, 'soma_noturnas' => 0],
+        'pendente' => ['soma_diurnas' => 0, 'soma_noturnas' => 0],
+    ];
+    foreach ($stmt->fetchAll() as $linha) {
+        $porStatus[$linha['status']] = $linha;
+    }
+
+    $diurnasAceitas  = (float) $porStatus['aceito']['soma_diurnas'];
+    $noturnasAceitas = (float) $porStatus['aceito']['soma_noturnas'];
+
+    responder(true, [
+        'horas_aceitas'   => round($diurnasAceitas + $noturnasAceitas, 2),
+        'horas_diurnas'   => round($diurnasAceitas, 2),
+        'horas_noturnas'  => round($noturnasAceitas, 2),
+        'horas_negadas'   => round((float) $porStatus['negado']['soma_diurnas'] + (float) $porStatus['negado']['soma_noturnas'], 2),
+        'horas_pendentes' => round((float) $porStatus['pendente']['soma_diurnas'] + (float) $porStatus['pendente']['soma_noturnas'], 2),
+    ]);
+}
+
+/**
+ * Funcionário cancela um pedido próprio, desde que ainda esteja pendente.
+ */
+function acaoCancelar(): void
+{
+    $usuario = exigirAutenticacao();
+    $dados   = corpoRequisicaoJson();
+
+    $idPlantao = (int) ($dados['id_plantao'] ?? 0);
+    if ($idPlantao === 0) {
+        responder(false, null, 'Plantão inválido.', 422);
+    }
+
+    $pdo = conexaoBanco();
+
+    $stmt = $pdo->prepare('SELECT id_usuario, status FROM plantoes WHERE id_plantao = :id');
+    $stmt->execute(['id' => $idPlantao]);
+    $plantao = $stmt->fetch();
+
+    if (!$plantao || (int) $plantao['id_usuario'] !== $usuario['id_usuario']) {
+        responder(false, null, 'Plantão não encontrado.', 404);
+    }
+
+    if ($plantao['status'] !== 'pendente') {
+        responder(false, null, 'Só é possível cancelar pedidos que ainda estão pendentes.', 422);
+    }
+
+    $ok = $pdo->prepare('DELETE FROM plantoes WHERE id_plantao = :id')->execute(['id' => $idPlantao]);
+
+    responder((bool) $ok, null, $ok ? 'Pedido cancelado.' : 'Erro ao cancelar pedido.');
 }
 
 /**

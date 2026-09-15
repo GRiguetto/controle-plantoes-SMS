@@ -196,9 +196,25 @@
       }
     });
 
+    function formatarHoras(valor) {
+      const numero = Number(valor ?? 0);
+      // Remove casas decimais quando é um número inteiro (ex: 42h em vez de 42.00h)
+      const texto = Number.isInteger(numero) ? String(numero) : numero.toFixed(2);
+      return `${texto}h`;
+    }
+
     async function carregarKpis() {
-      // TODO: implementar endpoint api/pedidos.php?acao=kpis retornando os totais
-      // de horas aceitas/diurnas/noturnas/negadas/pendentes do funcionário logado.
+      const resp = await apiFetch('pedidos.php?acao=kpis');
+
+      if (!resp.sucesso) {
+        return; // mantém "--" nos cards em caso de falha, sem travar a tela
+      }
+
+      document.getElementById('kpi-aceitas').textContent = formatarHoras(resp.dados.horas_aceitas);
+      document.getElementById('kpi-diurnas').textContent = formatarHoras(resp.dados.horas_diurnas);
+      document.getElementById('kpi-noturnas').textContent = formatarHoras(resp.dados.horas_noturnas);
+      document.getElementById('kpi-negadas').textContent = formatarHoras(resp.dados.horas_negadas);
+      document.getElementById('kpi-pendentes').textContent = formatarHoras(resp.dados.horas_pendentes);
     }
 
     function formatarDataHora(valor) {
@@ -256,8 +272,6 @@
     });
 
     document.getElementById('btn-confirmar-cancelar').addEventListener('click', async () => {
-      // TODO: implementar endpoint api/pedidos.php?acao=cancelar (id_plantao)
-      // que só permita cancelamento de pedidos com status "pendente" e dono = usuário logado.
       const resp = await apiFetch('pedidos.php?acao=cancelar', { id_plantao: idPedidoCancelar });
 
       if (!resp.sucesso) {
