@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Entrar | Sistema de Controle de Plantões</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="auth-shell">
+    <aside class="auth-aside">
+      <!-- Espaço reservado para o brasão de São José do Rio Preto.
+           Basta trocar o conteúdo abaixo por: <img src="img/brasao-rio-preto.png" alt="Brasão de São José do Rio Preto"> -->
+      <div class="auth-crest">
+        <img src="img/brasao-rio-preto.png" alt="Brasão de São José do Rio Preto" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'BRASÃO'}))">
+      </div>
+      <h1>Sistema de Controle de Plantões</h1>
+      <p>Registro de jornada, apuração de horas e avaliação de produtividade dos plantões das unidades de saúde.</p>
+      <div class="auth-org">Secretaria Municipal de Saúde · São José do Rio Preto</div>
+    </aside>
+
+    <main class="auth-main">
+      <div class="auth-form-box">
+        <div class="card">
+          <div class="tabs">
+            <button type="button" class="tab ativa" data-tab="login">Entrar</button>
+            <button type="button" class="tab" data-tab="cadastro">Criar conta</button>
+          </div>
+
+          <!-- Aba: Login -->
+          <section class="aba-conteudo ativa" id="aba-login">
+            <form id="form-login">
+              <div class="form-group">
+                <label for="identificador">Matrícula ou e-mail</label>
+                <input type="text" id="identificador" name="identificador" autocomplete="username" required>
+              </div>
+              <div class="form-group">
+                <label for="senha-login">Senha</label>
+                <input type="password" id="senha-login" name="senha" autocomplete="current-password" required>
+              </div>
+              <div id="mensagem-login" class="erro" style="display:none;"></div>
+              <button type="submit" class="btn btn-primary btn-block">Entrar</button>
+              <p style="text-align:center; margin-top:14px; font-size:13.5px;">
+                <a href="#" id="link-recuperar-senha">Esqueci minha senha</a>
+              </p>
+            </form>
+          </section>
+
+          <!-- Aba: Cadastro -->
+          <section class="aba-conteudo" id="aba-cadastro">
+            <form id="form-cadastro">
+              <div class="form-group">
+                <label for="nome_completo">Nome completo</label>
+                <input type="text" id="nome_completo" name="nome_completo" required>
+              </div>
+              <div class="form-group">
+                <label for="matricula">Matrícula</label>
+                <input type="text" id="matricula" name="matricula" required>
+              </div>
+              <div class="form-group">
+                <label for="id_unidades">Hospital/Unidade de lotação</label>
+                <select id="id_unidades" name="id_unidades" multiple></select>
+                <div class="form-hint">Segure Ctrl (ou Cmd no Mac) para selecionar mais de uma unidade.</div>
+              </div>
+              <div class="form-group">
+                <label for="email">E-mail</label>
+                <input type="email" id="email" name="email" required>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="senha-cadastro">Senha</label>
+                  <input type="password" id="senha-cadastro" name="senha" required>
+                </div>
+                <div class="form-group">
+                  <label for="confirmacao_senha">Confirmação</label>
+                  <input type="password" id="confirmacao_senha" name="confirmacao_senha" required>
+                </div>
+              </div>
+              <div id="mensagem-cadastro" class="erro" style="display:none;"></div>
+              <button type="submit" class="btn btn-primary btn-block">Criar conta</button>
+            </form>
+          </section>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/app.js"></script>
+  <script>
+    // Alternância de abas
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('ativa'));
+        document.querySelectorAll('.aba-conteudo').forEach(c => c.classList.remove('ativa'));
+        tab.classList.add('ativa');
+        document.getElementById(`aba-${tab.dataset.tab}`).classList.add('ativa');
+      });
+    });
+
+    // Submissão do login
+    document.getElementById('form-login').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const identificador = document.getElementById('identificador').value;
+      const senha = document.getElementById('senha-login').value;
+
+      const resp = await apiFetch('auth.php?acao=login', { identificador, senha });
+      if (!resp.sucesso) {
+        exibirMensagem('mensagem-login', resp.mensagem);
+        return;
+      }
+
+      const destino = {
+        funcionario: 'dashboard-funcionario.html',
+        gerente: 'dashboard-gerente.html',
+        administrador: 'dashboard-administrador.html',
+      }[resp.dados.perfil] || 'index.html';
+
+      window.location.href = destino;
+    });
+
+    // Submissão do cadastro
+    document.getElementById('form-cadastro').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const payload = {
+        nome_completo: document.getElementById('nome_completo').value,
+        matricula: document.getElementById('matricula').value,
+        email: document.getElementById('email').value,
+        senha: document.getElementById('senha-cadastro').value,
+        confirmacao_senha: document.getElementById('confirmacao_senha').value,
+        id_unidades: Array.from(document.getElementById('id_unidades').selectedOptions).map(o => o.value),
+      };
+
+      const resp = await apiFetch('auth.php?acao=cadastro', payload);
+      exibirMensagem('mensagem-cadastro', resp.mensagem, resp.sucesso ? 'sucesso' : 'erro');
+      if (resp.sucesso) {
+        document.querySelector('.tab[data-tab="login"]').click();
+      }
+    });
+
+    // Carrega unidades disponíveis para o select de cadastro
+    (async () => {
+      const resp = await apiFetch('unidades.php?acao=listar');
+      if (resp.sucesso) {
+        const select = document.getElementById('id_unidades');
+        resp.dados.forEach(u => {
+          const opt = document.createElement('option');
+          opt.value = u.id_unidade;
+          opt.textContent = u.nome;
+          select.appendChild(opt);
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

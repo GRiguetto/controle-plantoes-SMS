@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Painel do Administrador | Sistema de Controle de Plantões</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <div class="sidebar-brand-crest">
+          <img src="img/brasao-rio-preto.png" alt="Brasão de São José do Rio Preto" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'BRASÃO'}))">
+        </div>
+        <div class="sidebar-brand-text">Controle de Plantões<span>SMS Rio Preto</span></div>
+      </div>
+      <nav class="sidebar-nav"><!-- montado via JS conforme o perfil --></nav>
+      <div class="sidebar-footer">
+        <a href="meu-perfil.html"><span class="icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></span>Meu perfil</a>
+        <button type="button" id="btn-sair"><span class="icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></span>Sair</button>
+      </div>
+    </aside>
+
+    <div class="overlay-mobile" id="overlay-mobile"></div>
+
+    <div class="main-col">
+      <header class="topbar">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <button class="btn-menu-mobile" id="btn-menu-mobile" aria-label="Abrir menu">☰</button>
+          <span class="topbar-title">Visão Geral</span>
+        </div>
+        <div class="topbar-user">
+          <div>
+            <div class="topbar-user-nome" id="topbar-user-nome" style="text-align:right;">—</div>
+            <div class="topbar-user-perfil" id="topbar-user-perfil" style="text-align:right;">Administrador</div>
+          </div>
+          <div class="avatar-inicial" id="topbar-avatar">--</div>
+        </div>
+      </header>
+
+      <main class="content">
+        <div class="notice notice-info">
+          Perfil de acesso somente leitura sobre os pedidos de plantão — aprovação e negação são de responsabilidade exclusiva do gerente de cada unidade.
+        </div>
+
+        <div class="page-header">
+          <div>
+            <h1>Todas as unidades</h1>
+            <p>Use a aba Histórico para consultar plantões com filtros combinados (unidade, funcionário, período) e exportar relatórios em XLSX, CSV ou PDF.</p>
+          </div>
+          <a href="historico.html" class="btn btn-outline">Ir para histórico</a>
+        </div>
+
+        <div class="card" id="secao-usuarios">
+          <div class="card-header-row">
+            <div>
+              <div class="card-overline">GESTÃO DE USUÁRIOS</div>
+              <h2 style="font-size: var(--font-size-h2); margin-top:4px;">Buscar usuários</h2>
+            </div>
+            <button type="button" class="btn btn-primary" id="btn-novo-usuario">+ Novo usuário</button>
+          </div>
+
+          <div class="form-group">
+            <input type="text" id="input-busca-usuario" placeholder="Buscar por nome, matrícula, unidade ou perfil">
+          </div>
+
+          <div class="table-wrap">
+            <table class="tabela">
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Matrícula</th>
+                  <th>E-mail</th>
+                  <th>Perfil</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-usuarios"></tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Modal: novo usuário -->
+  <div class="modal-overlay" id="modal-novo-usuario">
+    <div class="modal-box">
+      <h2>Novo usuário</h2>
+      <p>Cria um acesso diretamente, sem passar pelo cadastro público.</p>
+      <form id="form-novo-usuario">
+        <div class="form-group" style="margin-top:14px;">
+          <label for="novo-nome">Nome completo</label>
+          <input type="text" id="novo-nome" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="novo-matricula">Matrícula</label>
+            <input type="text" id="novo-matricula" required>
+          </div>
+          <div class="form-group">
+            <label for="novo-perfil">Perfil</label>
+            <select id="novo-perfil" required>
+              <option value="funcionario">Funcionário</option>
+              <option value="gerente">Gerente</option>
+              <option value="administrador">Administrador</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="novo-email">E-mail</label>
+          <input type="email" id="novo-email" required>
+        </div>
+        <div class="form-group">
+          <label for="novo-unidades">Unidade(s)</label>
+          <select id="novo-unidades" multiple></select>
+        </div>
+        <div id="mensagem-novo-usuario" class="erro" style="display:none;"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-outline" id="btn-cancelar-novo-usuario">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Criar usuário</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: alterar senha -->
+  <div class="modal-overlay" id="modal-senha">
+    <div class="modal-box">
+      <h2>Alterar senha</h2>
+      <div class="form-group" style="margin-top:14px;">
+        <label for="input-nova-senha">Nova senha</label>
+        <input type="password" id="input-nova-senha" minlength="6" required>
+      </div>
+      <div id="mensagem-senha" class="erro" style="display:none;"></div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" id="btn-cancelar-senha">Cancelar</button>
+        <button class="btn btn-primary" id="btn-confirmar-senha">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: confirmar desativação -->
+  <div class="modal-overlay" id="modal-desativar">
+    <div class="modal-box">
+      <h2>Desativar usuário</h2>
+      <p>Esta ação preserva o histórico de plantões e apenas remove o usuário das listagens ativas. Deseja continuar?</p>
+      <div id="mensagem-desativar" class="erro" style="display:none;"></div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" id="btn-cancelar-desativar">Cancelar</button>
+        <button class="btn btn-danger" id="btn-confirmar-desativar">Desativar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+  <script>
+    let idUsuarioSelecionado = null;
+
+    async function buscarUsuarios(termo = '') {
+      const resp = await apiFetch(`usuarios.php?acao=buscar&termo=${encodeURIComponent(termo)}`);
+      const tbody = document.getElementById('tbody-usuarios');
+
+      if (!resp.sucesso) {
+        tbody.innerHTML = `<tr><td colspan="5" class="erro">${resp.mensagem}</td></tr>`;
+        return;
+      }
+
+      if (resp.dados.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="celula-vazia">Nenhum usuário encontrado.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = resp.dados.map(u => `
+        <tr>
+          <td>${u.nome_completo}</td>
+          <td>${u.matricula}</td>
+          <td>${u.email}</td>
+          <td>${u.perfil}</td>
+          <td>
+            <div class="item-acoes">
+              <button class="btn btn-outline btn-sm btn-senha" data-id="${u.id_usuario}">Alterar senha</button>
+              <button class="btn btn-danger-outline btn-sm btn-desativar" data-id="${u.id_usuario}">Desativar</button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+
+      document.querySelectorAll('.btn-senha').forEach(btn => {
+        btn.addEventListener('click', () => {
+          idUsuarioSelecionado = btn.dataset.id;
+          document.getElementById('input-nova-senha').value = '';
+          exibirMensagem('mensagem-senha', '');
+          document.getElementById('modal-senha').classList.add('ativo');
+        });
+      });
+
+      document.querySelectorAll('.btn-desativar').forEach(btn => {
+        btn.addEventListener('click', () => {
+          idUsuarioSelecionado = btn.dataset.id;
+          exibirMensagem('mensagem-desativar', '');
+          document.getElementById('modal-desativar').classList.add('ativo');
+        });
+      });
+    }
+
+    let timeoutBusca = null;
+    document.getElementById('input-busca-usuario').addEventListener('input', (ev) => {
+      clearTimeout(timeoutBusca);
+      timeoutBusca = setTimeout(() => buscarUsuarios(ev.target.value), 300);
+    });
+
+    document.getElementById('btn-cancelar-senha').addEventListener('click', () => {
+      document.getElementById('modal-senha').classList.remove('ativo');
+    });
+    document.getElementById('btn-cancelar-desativar').addEventListener('click', () => {
+      document.getElementById('modal-desativar').classList.remove('ativo');
+    });
+
+    document.getElementById('btn-confirmar-senha').addEventListener('click', async () => {
+      const novaSenha = document.getElementById('input-nova-senha').value;
+      if (novaSenha.length < 6) {
+        exibirMensagem('mensagem-senha', 'A senha deve ter no mínimo 6 caracteres.');
+        return;
+      }
+
+      const resp = await apiFetch('usuarios.php?acao=alterar_senha', {
+        id_usuario: idUsuarioSelecionado,
+        nova_senha: novaSenha,
+      });
+
+      if (!resp.sucesso) {
+        exibirMensagem('mensagem-senha', resp.mensagem);
+        return;
+      }
+
+      document.getElementById('modal-senha').classList.remove('ativo');
+    });
+
+    document.getElementById('btn-confirmar-desativar').addEventListener('click', async () => {
+      const resp = await apiFetch('usuarios.php?acao=desativar', {
+        id_usuario: idUsuarioSelecionado,
+      });
+
+      if (!resp.sucesso) {
+        exibirMensagem('mensagem-desativar', resp.mensagem);
+        return;
+      }
+
+      document.getElementById('modal-desativar').classList.remove('ativo');
+      buscarUsuarios(document.getElementById('input-busca-usuario').value);
+    });
+
+    // Novo usuário
+    document.getElementById('btn-novo-usuario').addEventListener('click', async () => {
+      document.getElementById('form-novo-usuario').reset();
+      exibirMensagem('mensagem-novo-usuario', '');
+      const select = document.getElementById('novo-unidades');
+      if (!select.dataset.carregado) {
+        const respUnidades = await apiFetch('unidades.php?acao=listar');
+        if (respUnidades.sucesso) {
+          respUnidades.dados.forEach(u => {
+            const opt = document.createElement('option');
+            opt.value = u.id_unidade;
+            opt.textContent = u.nome;
+            select.appendChild(opt);
+          });
+          select.dataset.carregado = '1';
+        }
+      }
+      document.getElementById('modal-novo-usuario').classList.add('ativo');
+    });
+
+    document.getElementById('btn-cancelar-novo-usuario').addEventListener('click', () => {
+      document.getElementById('modal-novo-usuario').classList.remove('ativo');
+    });
+
+    document.getElementById('form-novo-usuario').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+
+      // TODO: implementar endpoint api/usuarios.php?acao=criar (admin cria usuário
+      // diretamente, com senha provisória enviada por e-mail, por exemplo).
+      const payload = {
+        nome_completo: document.getElementById('novo-nome').value,
+        matricula: document.getElementById('novo-matricula').value,
+        perfil: document.getElementById('novo-perfil').value,
+        email: document.getElementById('novo-email').value,
+        id_unidades: Array.from(document.getElementById('novo-unidades').selectedOptions).map(o => o.value),
+      };
+
+      const resp = await apiFetch('usuarios.php?acao=criar', payload);
+      exibirMensagem('mensagem-novo-usuario', resp.mensagem, resp.sucesso ? 'sucesso' : 'erro');
+
+      if (resp.sucesso) {
+        document.getElementById('modal-novo-usuario').classList.remove('ativo');
+        buscarUsuarios(document.getElementById('input-busca-usuario').value);
+      }
+    });
+
+    (async function inicializar() {
+      const resp = await apiFetch('auth.php?acao=me');
+      if (!resp.sucesso) {
+        window.location.href = 'login.html';
+        return;
+      }
+
+      montarShell('administrador', 'dashboard-administrador.html', resp.dados.nome_completo);
+      await buscarUsuarios();
+    })();
+  </script>
+</body>
+</html>

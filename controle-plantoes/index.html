@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistema de Controle de Plantões</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body style="display:flex; align-items:center; justify-content:center; min-height:100vh; color: var(--color-text-secondary); font-size:14px;">
+  Carregando…
+  <script src="js/app.js"></script>
+  <script>
+    (async () => {
+      const resp = await apiFetch('auth.php?acao=me');
+
+      if (!resp.sucesso) {
+        window.location.href = 'login.html';
+        return;
+      }
+
+      const destino = {
+        funcionario: 'dashboard-funcionario.html',
+        gerente: 'dashboard-gerente.html',
+        administrador: 'dashboard-administrador.html',
+      }[resp.dados.perfil] || 'login.html';
+
+      window.location.href = destino;
+    })();
+  </script>
+</body>
+</html>

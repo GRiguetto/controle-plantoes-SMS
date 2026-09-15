@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meu Painel | Sistema de Controle de Plantões</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <div class="sidebar-brand-crest">
+          <img src="img/brasao-rio-preto.png" alt="Brasão de São José do Rio Preto" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'BRASÃO'}))">
+        </div>
+        <div class="sidebar-brand-text">Controle de Plantões<span>SMS Rio Preto</span></div>
+      </div>
+      <nav class="sidebar-nav"><!-- montado via JS conforme o perfil --></nav>
+      <div class="sidebar-footer">
+        <a href="meu-perfil.html"><span class="icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></span>Meu perfil</a>
+        <button type="button" id="btn-sair"><span class="icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></span>Sair</button>
+      </div>
+    </aside>
+
+    <div class="overlay-mobile" id="overlay-mobile"></div>
+
+    <div class="main-col">
+      <header class="topbar">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <button class="btn-menu-mobile" id="btn-menu-mobile" aria-label="Abrir menu">☰</button>
+          <span class="topbar-title">Meu Painel</span>
+        </div>
+        <div class="topbar-user">
+          <div>
+            <div class="topbar-user-nome" id="topbar-user-nome" style="text-align:right;">—</div>
+            <div class="topbar-user-perfil" id="topbar-user-perfil" style="text-align:right;">Funcionário</div>
+          </div>
+          <div class="avatar-inicial" id="topbar-avatar">--</div>
+        </div>
+      </header>
+
+      <main class="content">
+        <div class="page-header">
+          <div>
+            <h1>Resumo de horas</h1>
+            <p>Acompanhe suas horas do mês e registre um novo plantão.</p>
+          </div>
+        </div>
+
+        <div class="kpis" style="margin-bottom: 20px;">
+          <div class="kpi-card --aceitas">
+            <div class="kpi-valor" id="kpi-aceitas">--</div>
+            <div class="kpi-label">Horas aceitas</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-valor" id="kpi-diurnas">--</div>
+            <div class="kpi-label">Horas diurnas</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-valor" id="kpi-noturnas">--</div>
+            <div class="kpi-label">Horas noturnas</div>
+          </div>
+          <div class="kpi-card --negadas">
+            <div class="kpi-valor" id="kpi-negadas">--</div>
+            <div class="kpi-label">Horas negadas</div>
+          </div>
+          <div class="kpi-card --pendentes">
+            <div class="kpi-valor" id="kpi-pendentes">--</div>
+            <div class="kpi-label">Horas pendentes</div>
+          </div>
+        </div>
+
+        <div class="card" id="secao-registro">
+          <div class="card-overline">MEU PEDIDO</div>
+          <h2 style="font-size: var(--font-size-h2); margin-top:4px; margin-bottom:16px;">Registrar plantão</h2>
+
+          <form id="form-registro">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="id_unidade">Unidade</label>
+                <select id="id_unidade" name="id_unidade" required></select>
+              </div>
+              <div class="form-group">
+                <label for="setor">Setor</label>
+                <input type="text" id="setor" name="setor" placeholder="Ex: UTI, Pronto Socorro..." required>
+              </div>
+              <div class="form-group">
+                <label for="tipo_plantao">Tipo de plantão</label>
+                <select id="tipo_plantao" name="tipo_plantao" required>
+                  <option value="6h">6h</option>
+                  <option value="12h">12h</option>
+                  <option value="24h">24h</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="entrada">Entrada</label>
+                <input type="datetime-local" id="entrada" name="entrada" required>
+              </div>
+              <div class="form-group">
+                <label for="saida">Saída</label>
+                <input type="datetime-local" id="saida" name="saida">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Pausas</label>
+              <div id="lista-pausas"></div>
+              <button type="button" class="btn btn-outline btn-sm" id="btn-add-pausa">+ Adicionar pausa</button>
+            </div>
+
+            <div id="mensagem-registro" class="erro" style="display:none;"></div>
+            <button type="submit" class="btn btn-primary">Registrar plantão</button>
+          </form>
+        </div>
+
+        <div class="card" id="secao-recentes">
+          <div class="card-header-row">
+            <div>
+              <div class="card-overline">MEUS PEDIDOS</div>
+              <h2 style="font-size: var(--font-size-h2); margin-top:4px;">Últimos registros</h2>
+            </div>
+            <a href="historico.html" class="btn btn-outline btn-sm">Ver histórico completo</a>
+          </div>
+          <div id="lista-recentes">
+            <p class="text-muted">Carregando...</p>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Modal: cancelar pedido pendente -->
+  <div class="modal-overlay" id="modal-cancelar">
+    <div class="modal-box">
+      <h2>Cancelar pedido</h2>
+      <p>Este pedido ainda não foi avaliado pelo gerente. Deseja cancelá-lo?</p>
+      <div id="mensagem-cancelar" class="erro" style="display:none;"></div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" id="btn-voltar-cancelar">Voltar</button>
+        <button class="btn btn-danger" id="btn-confirmar-cancelar">Cancelar pedido</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+  <script>
+    let contadorPausas = 0;
+    let idPedidoCancelar = null;
+
+    function adicionarLinhaPausa() {
+      contadorPausas++;
+      const id = contadorPausas;
+      const div = document.createElement('div');
+      div.className = 'pausa-linha';
+      div.dataset.id = id;
+      div.innerHTML = `
+        <input type="datetime-local" class="pausa-inicio" style="flex:1;">
+        <span>até</span>
+        <input type="datetime-local" class="pausa-fim" style="flex:1;">
+        <button type="button" class="btn btn-outline btn-sm btn-remover-pausa">Remover</button>
+      `;
+      div.querySelector('.btn-remover-pausa').addEventListener('click', () => div.remove());
+      document.getElementById('lista-pausas').appendChild(div);
+    }
+
+    document.getElementById('btn-add-pausa').addEventListener('click', adicionarLinhaPausa);
+
+    document.getElementById('form-registro').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+
+      const pausas = Array.from(document.querySelectorAll('.pausa-linha')).map(linha => ({
+        inicio: linha.querySelector('.pausa-inicio').value || null,
+        fim: linha.querySelector('.pausa-fim').value || null,
+      }));
+
+      const payload = {
+        id_unidade: document.getElementById('id_unidade').value,
+        setor: document.getElementById('setor').value,
+        tipo_plantao: document.getElementById('tipo_plantao').value,
+        entrada: document.getElementById('entrada').value,
+        saida: document.getElementById('saida').value || null,
+        pausas,
+      };
+
+      const resp = await apiFetch('pedidos.php?acao=registrar', payload);
+      exibirMensagem('mensagem-registro', resp.mensagem, resp.sucesso ? 'sucesso' : 'erro');
+
+      if (resp.sucesso) {
+        document.getElementById('form-registro').reset();
+        document.getElementById('lista-pausas').innerHTML = '';
+        carregarKpis();
+        carregarRecentes();
+      }
+    });
+
+    async function carregarKpis() {
+      // TODO: implementar endpoint api/pedidos.php?acao=kpis retornando os totais
+      // de horas aceitas/diurnas/noturnas/negadas/pendentes do funcionário logado.
+    }
+
+    function formatarDataHora(valor) {
+      if (!valor) return '—';
+      return valor.replace('T', ' ').slice(0, 16);
+    }
+
+    async function carregarRecentes() {
+      const container = document.getElementById('lista-recentes');
+
+      // TODO: substituir por endpoint dedicado (ex: pedidos.php?acao=meus_recentes)
+      // que já traga só os últimos N pedidos do funcionário logado.
+      const resp = await apiFetch('pedidos.php?acao=historico&ano=' + new Date().getFullYear() + '&pagina=1');
+
+      if (!resp.sucesso) {
+        container.innerHTML = `<p class="erro">${resp.mensagem}</p>`;
+        return;
+      }
+
+      const registros = (resp.dados.registros || []).slice(0, 5);
+
+      if (registros.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">＋</div>
+            <p>Você ainda não registrou nenhum plantão.</p>
+          </div>`;
+        return;
+      }
+
+      container.innerHTML = registros.map(r => `
+        <div class="item-pedido">
+          <div class="item-info">
+            <strong>${r.tipo_plantao} · ${r.setor ?? r.unidade}</strong><br>
+            <span class="text-caption">${r.data_plantao} · Entrada: ${formatarDataHora(r.entrada)}${r.saida ? ' · Saída: ' + formatarDataHora(r.saida) : ''}</span>
+          </div>
+          <div class="item-acoes">
+            ${badgeStatus(r.status)}
+            ${r.status === 'pendente' ? `<button class="btn btn-danger-outline btn-sm btn-cancelar-pedido" data-id="${r.id_plantao}">Cancelar</button>` : ''}
+          </div>
+        </div>
+      `).join('');
+
+      document.querySelectorAll('.btn-cancelar-pedido').forEach(btn => {
+        btn.addEventListener('click', () => {
+          idPedidoCancelar = btn.dataset.id;
+          exibirMensagem('mensagem-cancelar', '');
+          document.getElementById('modal-cancelar').classList.add('ativo');
+        });
+      });
+    }
+
+    document.getElementById('btn-voltar-cancelar').addEventListener('click', () => {
+      document.getElementById('modal-cancelar').classList.remove('ativo');
+    });
+
+    document.getElementById('btn-confirmar-cancelar').addEventListener('click', async () => {
+      // TODO: implementar endpoint api/pedidos.php?acao=cancelar (id_plantao)
+      // que só permita cancelamento de pedidos com status "pendente" e dono = usuário logado.
+      const resp = await apiFetch('pedidos.php?acao=cancelar', { id_plantao: idPedidoCancelar });
+
+      if (!resp.sucesso) {
+        exibirMensagem('mensagem-cancelar', resp.mensagem || 'Não foi possível cancelar o pedido.');
+        return;
+      }
+
+      document.getElementById('modal-cancelar').classList.remove('ativo');
+      carregarRecentes();
+      carregarKpis();
+    });
+
+    async function carregarUnidades() {
+      const resp = await apiFetch('unidades.php?acao=listar');
+      if (resp.sucesso) {
+        const select = document.getElementById('id_unidade');
+        resp.dados.forEach(u => {
+          const opt = document.createElement('option');
+          opt.value = u.id_unidade;
+          opt.textContent = u.nome;
+          select.appendChild(opt);
+        });
+      }
+    }
+
+    (async function inicializar() {
+      const resp = await apiFetch('auth.php?acao=me');
+      if (!resp.sucesso) {
+        window.location.href = 'login.html';
+        return;
+      }
+
+      montarShell('funcionario', 'dashboard-funcionario.html', resp.dados.nome_completo);
+
+      await carregarUnidades();
+      await carregarKpis();
+      await carregarRecentes();
+    })();
+  </script>
+</body>
+</html>

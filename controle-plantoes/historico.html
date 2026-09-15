@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Histórico de Plantões</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <div class="sidebar-brand-crest">
+          <img src="img/brasao-rio-preto.png" alt="Brasão de São José do Rio Preto" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'BRASÃO'}))">
+        </div>
+        <div class="sidebar-brand-text">Controle de Plantões<span>SMS Rio Preto</span></div>
+      </div>
+      <nav class="sidebar-nav"><!-- montado via JS conforme o perfil --></nav>
+      <div class="sidebar-footer">
+        <a href="meu-perfil.html"><span class="icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></span>Meu perfil</a>
+        <button type="button" id="btn-sair"><span class="icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></span>Sair</button>
+      </div>
+    </aside>
+
+    <div class="overlay-mobile" id="overlay-mobile"></div>
+
+    <div class="main-col">
+      <header class="topbar">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <button class="btn-menu-mobile" id="btn-menu-mobile" aria-label="Abrir menu">☰</button>
+          <span class="topbar-title">Histórico de Plantões</span>
+        </div>
+        <div class="topbar-user">
+          <div>
+            <div class="topbar-user-nome" id="topbar-user-nome" style="text-align:right;">—</div>
+            <div class="topbar-user-perfil" id="topbar-user-perfil" style="text-align:right;">—</div>
+          </div>
+          <div class="avatar-inicial" id="topbar-avatar">--</div>
+        </div>
+      </header>
+
+      <main class="content">
+        <div class="page-header">
+          <div>
+            <h1>Histórico de plantões</h1>
+            <p>Filtre por período e, conforme seu perfil, por unidade e funcionário.</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <form id="form-filtros" class="form-row" style="align-items:flex-end;">
+            <div class="form-group" style="max-width:150px;">
+              <label for="filtro-mes">Mês</label>
+              <select id="filtro-mes" name="mes">
+                <option value="">Ano inteiro</option>
+              </select>
+            </div>
+            <div class="form-group" style="max-width:120px;">
+              <label for="filtro-ano">Ano</label>
+              <input type="number" id="filtro-ano" name="ano">
+            </div>
+            <div class="form-group" id="grupo-filtro-unidade" style="max-width:220px; display:none;">
+              <label for="filtro-unidade">Unidade</label>
+              <select id="filtro-unidade" name="id_unidade">
+                <option value="">Todas</option>
+              </select>
+            </div>
+            <div class="form-group" id="grupo-filtro-funcionario" style="max-width:260px; display:none;">
+              <label for="filtro-funcionario">Funcionário(s)</label>
+              <select id="filtro-funcionario" name="id_usuario" multiple size="1"></select>
+            </div>
+            <div class="form-group" style="flex:0;">
+              <button type="submit" class="btn btn-primary">Filtrar</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card">
+          <div id="mensagem-historico" class="erro" style="display:none;"></div>
+
+          <div class="table-wrap">
+            <table class="tabela" id="tabela-historico">
+              <thead>
+                <tr>
+                  <th>Funcionário</th>
+                  <th>Unidade</th>
+                  <th>Setor</th>
+                  <th>Tipo</th>
+                  <th>Data</th>
+                  <th>Status</th>
+                  <th>Produção / Justificativa</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-historico">
+                <tr><td colspan="7" class="celula-vazia">Carregando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="paginacao">
+            <button class="btn btn-outline btn-sm" id="btn-pagina-anterior">Anterior</button>
+            <span id="info-pagina">Página 1 de 1</span>
+            <button class="btn btn-outline btn-sm" id="btn-proxima-pagina">Próxima</button>
+          </div>
+        </div>
+
+        <div class="card" id="card-exportar" style="display:none;">
+          <div class="card-overline">EXPORTAR</div>
+          <h2 style="font-size: var(--font-size-h2); margin-top:4px; margin-bottom:12px;">Exportar resultado filtrado</h2>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <a class="btn btn-outline" href="#" id="link-exportar-csv">CSV</a>
+            <a class="btn btn-outline" href="#" id="link-exportar-xlsx" title="Ainda não implementado no back-end">XLSX</a>
+            <a class="btn btn-outline" href="#" id="link-exportar-pdf" title="Ainda não implementado no back-end">PDF</a>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+  <script>
+    const NOMES_MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+    let perfilAtual = null;
+    let paginaAtual = 1;
+    let totalPaginas = 1;
+
+    function popularMeses() {
+      const select = document.getElementById('filtro-mes');
+      NOMES_MESES.forEach((nome, i) => {
+        const opt = document.createElement('option');
+        opt.value = String(i + 1);
+        opt.textContent = nome;
+        select.appendChild(opt);
+      });
+    }
+
+    async function popularUnidades() {
+      const resp = await apiFetch('unidades.php?acao=listar');
+      if (!resp.sucesso) return;
+
+      const select = document.getElementById('filtro-unidade');
+      resp.dados.forEach(u => {
+        const opt = document.createElement('option');
+        opt.value = u.id_unidade;
+        opt.textContent = u.nome;
+        select.appendChild(opt);
+      });
+    }
+
+    async function popularFuncionarios(idUnidade = '') {
+      const query = idUnidade ? `&id_unidade=${idUnidade}` : '';
+      const resp = await apiFetch(`usuarios.php?acao=listar_funcionarios${query}`);
+      const select = document.getElementById('filtro-funcionario');
+      select.innerHTML = '';
+
+      if (!resp.sucesso) return;
+
+      resp.dados.forEach(f => {
+        const opt = document.createElement('option');
+        opt.value = f.id_usuario;
+        opt.textContent = `${f.nome_completo} (${f.matricula})`;
+        select.appendChild(opt);
+      });
+    }
+
+    function construirQueryFiltros() {
+      const mes = document.getElementById('filtro-mes').value;
+      const ano = document.getElementById('filtro-ano').value;
+      const params = new URLSearchParams();
+
+      params.set('ano', ano);
+      if (mes) params.set('mes', mes);
+      params.set('pagina', paginaAtual);
+
+      if (perfilAtual === 'administrador') {
+        const idUnidade = document.getElementById('filtro-unidade').value;
+        if (idUnidade) params.set('id_unidade', idUnidade);
+      }
+
+      if (perfilAtual === 'gerente' || perfilAtual === 'administrador') {
+        const selecionados = Array.from(document.getElementById('filtro-funcionario').selectedOptions).map(o => o.value);
+        selecionados.forEach(id => params.append('id_usuario[]', id));
+      }
+
+      return params.toString();
+    }
+
+    function formatarDataHora(valor) {
+      if (!valor) return '—';
+      return valor.replace('T', ' ').slice(0, 16);
+    }
+
+    async function carregarHistorico() {
+      const tbody = document.getElementById('tbody-historico');
+      tbody.innerHTML = '<tr><td colspan="7" class="celula-vazia">Carregando...</td></tr>';
+      exibirMensagem('mensagem-historico', '');
+
+      const resp = await apiFetch(`pedidos.php?acao=historico&${construirQueryFiltros()}`);
+
+      if (!resp.sucesso) {
+        exibirMensagem('mensagem-historico', resp.mensagem || 'Erro ao carregar histórico.');
+        tbody.innerHTML = '<tr><td colspan="7" class="celula-vazia">Não foi possível carregar os dados.</td></tr>';
+        return;
+      }
+
+      const { registros, total_paginas, pagina } = resp.dados;
+      totalPaginas = Math.max(1, total_paginas);
+      paginaAtual = pagina;
+      document.getElementById('info-pagina').textContent = `Página ${paginaAtual} de ${totalPaginas}`;
+
+      if (registros.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="celula-vazia">Nenhum plantão encontrado para os filtros selecionados.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = registros.map(r => `
+        <tr>
+          <td>${r.nome_completo}<br><span class="text-caption">${r.matricula}</span></td>
+          <td>${r.unidade}</td>
+          <td>${r.setor ?? '—'}</td>
+          <td>${r.tipo_plantao}</td>
+          <td>${r.data_plantao}<br><span class="text-caption">${formatarDataHora(r.entrada)}${r.saida ? ' — ' + formatarDataHora(r.saida) : ''}</span></td>
+          <td>${badgeStatus(r.status)}</td>
+          <td>${r.status === 'aceito' ? (r.producao ?? '—') : (r.status === 'negado' ? (r.justificativa_negacao ?? '—') : '—')}</td>
+        </tr>
+      `).join('');
+    }
+
+    function atualizarLinksExportacao() {
+      const query = construirQueryFiltros();
+      document.getElementById('link-exportar-csv').href = `api/relatorios.php?formato=csv&${query}`;
+      document.getElementById('link-exportar-xlsx').href = `api/relatorios.php?formato=xlsx&${query}`;
+      document.getElementById('link-exportar-pdf').href = `api/relatorios.php?formato=pdf&${query}`;
+    }
+
+    document.getElementById('form-filtros').addEventListener('submit', (ev) => {
+      ev.preventDefault();
+      paginaAtual = 1;
+      carregarHistorico();
+      atualizarLinksExportacao();
+    });
+
+    document.getElementById('filtro-unidade').addEventListener('change', (ev) => {
+      if (perfilAtual === 'administrador') {
+        popularFuncionarios(ev.target.value);
+      }
+    });
+
+    document.getElementById('btn-pagina-anterior').addEventListener('click', () => {
+      if (paginaAtual > 1) {
+        paginaAtual--;
+        carregarHistorico();
+      }
+    });
+
+    document.getElementById('btn-proxima-pagina').addEventListener('click', () => {
+      if (paginaAtual < totalPaginas) {
+        paginaAtual++;
+        carregarHistorico();
+      }
+    });
+
+    (async function inicializar() {
+      const resp = await apiFetch('auth.php?acao=me');
+      if (!resp.sucesso) {
+        window.location.href = 'login.html';
+        return;
+      }
+
+      perfilAtual = resp.dados.perfil;
+      document.getElementById('filtro-ano').value = new Date().getFullYear();
+
+      montarShell(perfilAtual, 'historico.html', resp.dados.nome_completo);
+      popularMeses();
+
+      if (perfilAtual === 'administrador') {
+        document.getElementById('grupo-filtro-unidade').style.display = 'block';
+        document.getElementById('grupo-filtro-funcionario').style.display = 'block';
+        await popularUnidades();
+        await popularFuncionarios();
+      } else if (perfilAtual === 'gerente') {
+        document.getElementById('grupo-filtro-funcionario').style.display = 'block';
+        await popularFuncionarios();
+      }
+
+      if (perfilAtual === 'gerente' || perfilAtual === 'administrador') {
+        document.getElementById('card-exportar').style.display = 'block';
+      }
+
+      await carregarHistorico();
+      atualizarLinksExportacao();
+    })();
+  </script>
+</body>
+</html>

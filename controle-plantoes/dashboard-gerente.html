@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Painel do Gerente | Sistema de Controle de Plantões</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <div class="sidebar-brand-crest">
+          <img src="img/brasao-rio-preto.png" alt="Brasão de São José do Rio Preto" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'BRASÃO'}))">
+        </div>
+        <div class="sidebar-brand-text">Controle de Plantões<span>SMS Rio Preto</span></div>
+      </div>
+      <nav class="sidebar-nav"><!-- montado via JS conforme o perfil --></nav>
+      <div class="sidebar-footer">
+        <a href="meu-perfil.html"><span class="icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></span>Meu perfil</a>
+        <button type="button" id="btn-sair"><span class="icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></span>Sair</button>
+      </div>
+    </aside>
+
+    <div class="overlay-mobile" id="overlay-mobile"></div>
+
+    <div class="main-col">
+      <header class="topbar">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <button class="btn-menu-mobile" id="btn-menu-mobile" aria-label="Abrir menu">☰</button>
+          <span class="topbar-title">Pedidos Pendentes</span>
+        </div>
+        <div class="topbar-user">
+          <div>
+            <div class="topbar-user-nome" id="topbar-user-nome" style="text-align:right;">—</div>
+            <div class="topbar-user-perfil" id="topbar-user-perfil" style="text-align:right;">Gerente</div>
+          </div>
+          <div class="avatar-inicial" id="topbar-avatar">--</div>
+        </div>
+      </header>
+
+      <main class="content">
+        <div class="page-header">
+          <div>
+            <h1>Plantões pendentes</h1>
+            <p>Avalie os pedidos de plantão da sua unidade — aprove informando a produção ou negue com justificativa.</p>
+          </div>
+          <button type="button" class="btn btn-outline" id="btn-atualizar-pendentes">Atualizar lista</button>
+        </div>
+
+        <div class="card">
+          <div id="lista-pendentes">
+            <p class="text-muted">Carregando...</p>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Modal: aprovar (exige produção) -->
+  <div class="modal-overlay" id="modal-aprovar">
+    <div class="modal-box">
+      <h2>Aprovar plantão</h2>
+      <div class="form-group" style="margin-top:14px;">
+        <label for="input-producao">Produção (quantidade de atendimentos)</label>
+        <input type="number" id="input-producao" min="0" required>
+      </div>
+      <div id="mensagem-aprovar" class="erro" style="display:none;"></div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" id="btn-cancelar-aprovar">Cancelar</button>
+        <button class="btn btn-primary" id="btn-confirmar-aprovar">Confirmar aprovação</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: negar (exige justificativa) -->
+  <div class="modal-overlay" id="modal-negar">
+    <div class="modal-box">
+      <h2>Negar plantão</h2>
+      <div class="form-group" style="margin-top:14px;">
+        <label for="input-justificativa">Justificativa</label>
+        <textarea id="input-justificativa" rows="4" required></textarea>
+      </div>
+      <div id="mensagem-negar" class="erro" style="display:none;"></div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" id="btn-cancelar-negar">Cancelar</button>
+        <button class="btn btn-danger" id="btn-confirmar-negar">Confirmar negação</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+  <script>
+    let idPlantaoSelecionado = null;
+
+    function formatarDataHora(valor) {
+      if (!valor) return '—';
+      return valor.replace('T', ' ').slice(0, 16);
+    }
+
+    async function carregarPendentes() {
+      const resp = await apiFetch('pedidos.php?acao=pendentes');
+      const container = document.getElementById('lista-pendentes');
+
+      if (!resp.sucesso) {
+        container.innerHTML = `<p class="erro">${resp.mensagem}</p>`;
+        return;
+      }
+
+      if (resp.dados.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">✓</div>
+            <p>Nenhum pedido pendente no momento.</p>
+          </div>`;
+        return;
+      }
+
+      container.innerHTML = resp.dados.map(p => `
+        <div class="item-pedido">
+          <div class="item-info">
+            <strong>${p.nome_completo}</strong> <span class="text-caption">(${p.matricula})</span><br>
+            <span class="text-caption">
+              ${p.tipo_plantao} · ${p.data_plantao} · Entrada: ${formatarDataHora(p.entrada)}${p.saida ? ' · Saída: ' + formatarDataHora(p.saida) : ''}
+            </span>
+          </div>
+          <div class="item-acoes">
+            <button class="btn btn-primary btn-sm btn-aprovar" data-id="${p.id_plantao}">Aprovar</button>
+            <button class="btn btn-danger-outline btn-sm btn-negar" data-id="${p.id_plantao}">Negar</button>
+          </div>
+        </div>
+      `).join('');
+
+      document.querySelectorAll('.btn-aprovar').forEach(btn => {
+        btn.addEventListener('click', () => abrirModalAprovar(btn.dataset.id));
+      });
+      document.querySelectorAll('.btn-negar').forEach(btn => {
+        btn.addEventListener('click', () => abrirModalNegar(btn.dataset.id));
+      });
+    }
+
+    function abrirModalAprovar(id) {
+      idPlantaoSelecionado = id;
+      document.getElementById('input-producao').value = '';
+      exibirMensagem('mensagem-aprovar', '');
+      document.getElementById('modal-aprovar').classList.add('ativo');
+    }
+
+    function abrirModalNegar(id) {
+      idPlantaoSelecionado = id;
+      document.getElementById('input-justificativa').value = '';
+      exibirMensagem('mensagem-negar', '');
+      document.getElementById('modal-negar').classList.add('ativo');
+    }
+
+    document.getElementById('btn-cancelar-aprovar').addEventListener('click', () => {
+      document.getElementById('modal-aprovar').classList.remove('ativo');
+    });
+    document.getElementById('btn-cancelar-negar').addEventListener('click', () => {
+      document.getElementById('modal-negar').classList.remove('ativo');
+    });
+
+    document.getElementById('btn-confirmar-aprovar').addEventListener('click', async () => {
+      const producao = document.getElementById('input-producao').value;
+      if (producao === '') {
+        exibirMensagem('mensagem-aprovar', 'Informe a produção.');
+        return;
+      }
+
+      const resp = await apiFetch('pedidos.php?acao=aprovar', {
+        id_plantao: idPlantaoSelecionado,
+        producao: Number(producao),
+      });
+
+      if (!resp.sucesso) {
+        exibirMensagem('mensagem-aprovar', resp.mensagem);
+        return;
+      }
+
+      document.getElementById('modal-aprovar').classList.remove('ativo');
+      carregarPendentes();
+    });
+
+    document.getElementById('btn-confirmar-negar').addEventListener('click', async () => {
+      const justificativa = document.getElementById('input-justificativa').value.trim();
+      if (justificativa === '') {
+        exibirMensagem('mensagem-negar', 'A justificativa é obrigatória.');
+        return;
+      }
+
+      const resp = await apiFetch('pedidos.php?acao=negar', {
+        id_plantao: idPlantaoSelecionado,
+        justificativa,
+      });
+
+      if (!resp.sucesso) {
+        exibirMensagem('mensagem-negar', resp.mensagem);
+        return;
+      }
+
+      document.getElementById('modal-negar').classList.remove('ativo');
+      carregarPendentes();
+    });
+
+    document.getElementById('btn-atualizar-pendentes').addEventListener('click', carregarPendentes);
+
+    (async function inicializar() {
+      const resp = await apiFetch('auth.php?acao=me');
+      if (!resp.sucesso) {
+        window.location.href = 'login.html';
+        return;
+      }
+
+      montarShell('gerente', 'dashboard-gerente.html', resp.dados.nome_completo);
+      await carregarPendentes();
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meu Perfil | Sistema de Controle de Plantões</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <div class="sidebar-brand-crest">
+          <img src="img/brasao-rio-preto.png" alt="Brasão de São José do Rio Preto" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'BRASÃO'}))">
+        </div>
+        <div class="sidebar-brand-text">Controle de Plantões<span>SMS Rio Preto</span></div>
+      </div>
+      <nav class="sidebar-nav"><!-- montado via JS conforme o perfil --></nav>
+      <div class="sidebar-footer">
+        <a href="meu-perfil.html" class="ativo"><span class="icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></span>Meu perfil</a>
+        <button type="button" id="btn-sair"><span class="icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></span>Sair</button>
+      </div>
+    </aside>
+
+    <div class="overlay-mobile" id="overlay-mobile"></div>
+
+    <div class="main-col">
+      <header class="topbar">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <button class="btn-menu-mobile" id="btn-menu-mobile" aria-label="Abrir menu">☰</button>
+          <span class="topbar-title">Meu Perfil</span>
+        </div>
+        <div class="topbar-user">
+          <div>
+            <div class="topbar-user-nome" id="topbar-user-nome" style="text-align:right;">—</div>
+            <div class="topbar-user-perfil" id="topbar-user-perfil" style="text-align:right;">—</div>
+          </div>
+          <div class="avatar-inicial" id="topbar-avatar">--</div>
+        </div>
+      </header>
+
+      <main class="content" style="max-width: 640px;">
+        <div class="page-header">
+          <div>
+            <h1>Minha conta</h1>
+            <p>Atualize seus dados de contato, unidades vinculadas e senha de acesso.</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-overline">DADOS FUNCIONAIS</div>
+          <h2 style="font-size: var(--font-size-h2); margin-top:4px; margin-bottom:16px;">Dados pessoais</h2>
+
+          <form id="form-dados">
+            <div class="form-group">
+              <label for="matricula">Matrícula</label>
+              <input type="text" id="matricula" disabled title="A matrícula não pode ser alterada">
+            </div>
+            <div class="form-group">
+              <label for="nome_completo">Nome completo</label>
+              <input type="text" id="nome_completo" required>
+            </div>
+            <div class="form-group">
+              <label for="email">E-mail</label>
+              <input type="email" id="email" required>
+            </div>
+            <div class="form-group">
+              <label for="unidades">Unidade(s) vinculada(s)</label>
+              <select id="unidades" multiple></select>
+            </div>
+            <div id="mensagem-dados" class="erro" style="display:none;"></div>
+            <button type="submit" class="btn btn-primary">Salvar alterações</button>
+          </form>
+        </div>
+
+        <div class="card">
+          <div class="card-overline">SEGURANÇA</div>
+          <h2 style="font-size: var(--font-size-h2); margin-top:4px; margin-bottom:16px;">Alterar senha</h2>
+
+          <form id="form-senha">
+            <div class="form-group">
+              <label for="senha_atual">Senha atual</label>
+              <input type="password" id="senha_atual" required>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="nova_senha">Nova senha</label>
+                <input type="password" id="nova_senha" minlength="6" required>
+              </div>
+              <div class="form-group">
+                <label for="confirmar_nova_senha">Confirmar nova senha</label>
+                <input type="password" id="confirmar_nova_senha" minlength="6" required>
+              </div>
+            </div>
+            <div id="mensagem-senha" class="erro" style="display:none;"></div>
+            <button type="submit" class="btn btn-primary">Alterar senha</button>
+          </form>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+  <script>
+    async function carregarMeusDados() {
+      const resp = await apiFetch('auth.php?acao=me');
+      if (!resp.sucesso) {
+        window.location.href = 'login.html';
+        return;
+      }
+
+      montarShell(resp.dados.perfil, 'meu-perfil.html', resp.dados.nome_completo);
+
+      document.getElementById('matricula').value = resp.dados.matricula;
+      document.getElementById('nome_completo').value = resp.dados.nome_completo;
+      document.getElementById('email').value = resp.dados.email;
+
+      const respUnidades = await apiFetch('unidades.php?acao=listar');
+      const select = document.getElementById('unidades');
+      if (respUnidades.sucesso) {
+        const vinculadas = resp.dados.unidades.map(u => String(u.id_unidade));
+        respUnidades.dados.forEach(u => {
+          const opt = document.createElement('option');
+          opt.value = u.id_unidade;
+          opt.textContent = u.nome;
+          opt.selected = vinculadas.includes(String(u.id_unidade));
+          select.appendChild(opt);
+        });
+      }
+    }
+
+    document.getElementById('form-dados').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+
+      const resp = await apiFetch('usuarios.php?acao=alterar_meus_dados', {
+        nome_completo: document.getElementById('nome_completo').value,
+        email: document.getElementById('email').value,
+      });
+
+      exibirMensagem('mensagem-dados', resp.mensagem, resp.sucesso ? 'sucesso' : 'erro');
+    });
+
+    document.getElementById('form-senha').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+
+      const novaSenha = document.getElementById('nova_senha').value;
+      const confirmacao = document.getElementById('confirmar_nova_senha').value;
+
+      if (novaSenha !== confirmacao) {
+        exibirMensagem('mensagem-senha', 'A confirmação de senha não confere.');
+        return;
+      }
+
+      const resp = await apiFetch('usuarios.php?acao=trocar_minha_senha', {
+        senha_atual: document.getElementById('senha_atual').value,
+        nova_senha: novaSenha,
+      });
+
+      exibirMensagem('mensagem-senha', resp.mensagem, resp.sucesso ? 'sucesso' : 'erro');
+      if (resp.sucesso) {
+        document.getElementById('form-senha').reset();
+      }
+    });
+
+    carregarMeusDados();
+  </script>
+</body>
+</html>
