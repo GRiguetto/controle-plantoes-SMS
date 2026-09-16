@@ -71,49 +71,14 @@
         </div>
 
         <div class="card" id="secao-registro">
-          <div class="card-overline">MEU PEDIDO</div>
-          <h2 style="font-size: var(--font-size-h2); margin-top:4px; margin-bottom:16px;">Registrar plantão</h2>
-
-          <form id="form-registro">
-            <div class="form-row">
-              <div class="form-group">
-                <label for="id_unidade">Unidade</label>
-                <select id="id_unidade" name="id_unidade" required></select>
-              </div>
-              <div class="form-group">
-                <label for="setor">Setor</label>
-                <input type="text" id="setor" name="setor" placeholder="Ex: UTI, Pronto Socorro..." required>
-              </div>
-              <div class="form-group">
-                <label for="tipo_plantao">Tipo de plantão</label>
-                <select id="tipo_plantao" name="tipo_plantao" required>
-                  <option value="6h">6h</option>
-                  <option value="12h">12h</option>
-                  <option value="24h">24h</option>
-                </select>
-              </div>
+          <div class="card-header-row">
+            <div>
+              <div class="card-overline">MEU PEDIDO</div>
+              <h2 style="font-size: var(--font-size-h2); margin-top:4px;">Registrar plantão</h2>
+              <p class="text-muted" style="margin-top:4px;">Informe o período do plantão e, se precisar, as pausas de descanso dentro dele.</p>
             </div>
-
-            <div class="form-row">
-              <div class="form-group">
-                <label for="entrada">Entrada</label>
-                <input type="datetime-local" id="entrada" name="entrada" required>
-              </div>
-              <div class="form-group">
-                <label for="saida">Saída</label>
-                <input type="datetime-local" id="saida" name="saida">
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label>Pausas</label>
-              <div id="lista-pausas"></div>
-              <button type="button" class="btn btn-outline btn-sm" id="btn-add-pausa">+ Adicionar pausa</button>
-            </div>
-
-            <div id="mensagem-registro" class="erro" style="display:none;"></div>
-            <button type="submit" class="btn btn-primary">Registrar plantão</button>
-          </form>
+            <button type="button" class="btn btn-primary" id="btn-novo-plantao">+ Novo plantão</button>
+          </div>
         </div>
 
         <div class="card" id="secao-recentes">
@@ -129,6 +94,68 @@
           </div>
         </div>
       </main>
+    </div>
+  </div>
+
+  <!-- Modal: novo plantão -->
+  <div class="modal-overlay" id="modal-novo-plantao">
+    <div class="modal-box">
+      <h2>Novo plantão</h2>
+      <p class="text-muted" style="margin-top:4px;">Defina o período do plantão. As pausas ficam dentro desse período — informe só o horário.</p>
+
+      <form id="form-novo-plantao" style="margin-top:14px;">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="np-id_unidade">Unidade</label>
+            <select id="np-id_unidade" required></select>
+          </div>
+          <div class="form-group">
+            <label for="np-setor">Setor</label>
+            <input type="text" id="np-setor" placeholder="Ex: UTI, Pronto Socorro..." required>
+          </div>
+          <div class="form-group">
+            <label for="np-tipo_plantao">Tipo de plantão</label>
+            <select id="np-tipo_plantao" required>
+              <option value="6h">6h</option>
+              <option value="12h">12h</option>
+              <option value="24h">24h</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="np-data">Data do plantão (início)</label>
+          <input type="date" id="np-data" required>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="np-hora-entrada">Horário de entrada</label>
+            <input type="time" id="np-hora-entrada" required>
+          </div>
+          <div class="form-group">
+            <label for="np-hora-saida">Horário de saída</label>
+            <input type="time" id="np-hora-saida">
+            <div class="form-hint">Se ainda estiver no plantão, deixe em branco.</div>
+          </div>
+        </div>
+        <div class="form-hint" id="np-aviso-virada" style="display:none;">
+          O horário de saída é menor que o de entrada, então o sistema vai considerar que o plantão termina no dia seguinte.
+        </div>
+
+        <div class="form-group">
+          <label>Pausas (opcional)</label>
+          <div id="np-lista-pausas"></div>
+          <button type="button" class="btn btn-outline btn-sm" id="np-btn-add-pausa">+ Adicionar pausa</button>
+          <div class="form-hint">Informe só o horário — a pausa é sempre entendida como parte deste mesmo plantão.</div>
+        </div>
+
+        <div id="mensagem-novo-plantao" class="erro" style="display:none;"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-outline" id="np-btn-cancelar">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Registrar plantão</button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -150,50 +177,114 @@
     let contadorPausas = 0;
     let idPedidoCancelar = null;
 
-    function adicionarLinhaPausa() {
+    /**
+     * Combina uma data-base (YYYY-MM-DD) com um horário (HH:MM), assumindo
+     * que o horário pertence ao dia seguinte quando ele for "menor" que o
+     * horário de referência informado — é assim que tratamos plantões que
+     * viram a noite (12h/24h) sem precisar pedir a data da pausa/saída.
+     */
+    function combinarDataHora(dataBase, hora, horaReferencia) {
+      const data = new Date(`${dataBase}T00:00:00`);
+      if (horaReferencia !== null && hora < horaReferencia) {
+        data.setDate(data.getDate() + 1);
+      }
+      const dataFormatada = data.toISOString().slice(0, 10);
+      return `${dataFormatada}T${hora}`;
+    }
+
+    function adicionarLinhaPausaModal() {
       contadorPausas++;
       const id = contadorPausas;
       const div = document.createElement('div');
       div.className = 'pausa-linha';
       div.dataset.id = id;
       div.innerHTML = `
-        <input type="datetime-local" class="pausa-inicio" style="flex:1;">
+        <input type="time" class="pausa-inicio" style="flex:1;">
         <span>até</span>
-        <input type="datetime-local" class="pausa-fim" style="flex:1;">
+        <input type="time" class="pausa-fim" style="flex:1;">
         <button type="button" class="btn btn-outline btn-sm btn-remover-pausa">Remover</button>
       `;
       div.querySelector('.btn-remover-pausa').addEventListener('click', () => div.remove());
-      document.getElementById('lista-pausas').appendChild(div);
+      document.getElementById('np-lista-pausas').appendChild(div);
     }
 
-    document.getElementById('btn-add-pausa').addEventListener('click', adicionarLinhaPausa);
+    document.getElementById('np-btn-add-pausa').addEventListener('click', adicionarLinhaPausaModal);
 
-    document.getElementById('form-registro').addEventListener('submit', async (ev) => {
+    function abrirModalNovoPlantao() {
+      document.getElementById('form-novo-plantao').reset();
+      document.getElementById('np-lista-pausas').innerHTML = '';
+      document.getElementById('np-aviso-virada').style.display = 'none';
+      exibirMensagem('mensagem-novo-plantao', '');
+      // Sugere a data de hoje por padrão, pra agilizar o preenchimento
+      document.getElementById('np-data').value = new Date().toISOString().slice(0, 10);
+      document.getElementById('modal-novo-plantao').classList.add('ativo');
+    }
+
+    document.getElementById('btn-novo-plantao').addEventListener('click', abrirModalNovoPlantao);
+    document.getElementById('np-btn-cancelar').addEventListener('click', () => {
+      document.getElementById('modal-novo-plantao').classList.remove('ativo');
+    });
+
+    // Avisa visualmente quando a saída for "menor" que a entrada (plantão vira o dia)
+    function atualizarAvisoVirada() {
+      const entrada = document.getElementById('np-hora-entrada').value;
+      const saida = document.getElementById('np-hora-saida').value;
+      const virou = Boolean(entrada && saida && saida < entrada);
+      document.getElementById('np-aviso-virada').style.display = virou ? 'block' : 'none';
+    }
+    document.getElementById('np-hora-entrada').addEventListener('change', atualizarAvisoVirada);
+    document.getElementById('np-hora-saida').addEventListener('change', atualizarAvisoVirada);
+
+    document.getElementById('form-novo-plantao').addEventListener('submit', async (ev) => {
       ev.preventDefault();
 
-      const pausas = Array.from(document.querySelectorAll('.pausa-linha')).map(linha => ({
-        inicio: linha.querySelector('.pausa-inicio').value || null,
-        fim: linha.querySelector('.pausa-fim').value || null,
-      }));
+      const data = document.getElementById('np-data').value;
+      const horaEntrada = document.getElementById('np-hora-entrada').value;
+      const horaSaida = document.getElementById('np-hora-saida').value;
+
+      if (!data || !horaEntrada) {
+        exibirMensagem('mensagem-novo-plantao', 'Informe a data e o horário de entrada.');
+        return;
+      }
+
+      const entrada = combinarDataHora(data, horaEntrada, null);
+      const saida = horaSaida ? combinarDataHora(data, horaSaida, horaEntrada) : null;
+
+      // Cada pausa é combinada em relação à entrada (início) e depois em
+      // relação ao próprio início da pausa (fim) — cobre o caso raro de uma
+      // pausa que também atravessa a meia-noite dentro de um plantão de 24h.
+      const linhasPausa = Array.from(document.querySelectorAll('#np-lista-pausas .pausa-linha'));
+      const pausas = [];
+      for (const linha of linhasPausa) {
+        const horaInicioPausa = linha.querySelector('.pausa-inicio').value;
+        const horaFimPausa = linha.querySelector('.pausa-fim').value;
+        if (!horaInicioPausa) {
+          continue; // ignora linhas de pausa vazias
+        }
+        const inicioPausa = combinarDataHora(data, horaInicioPausa, horaEntrada);
+        const fimPausa = horaFimPausa ? combinarDataHora(data, horaFimPausa, horaInicioPausa) : null;
+        pausas.push({ inicio: inicioPausa, fim: fimPausa });
+      }
 
       const payload = {
-        id_unidade: document.getElementById('id_unidade').value,
-        setor: document.getElementById('setor').value,
-        tipo_plantao: document.getElementById('tipo_plantao').value,
-        entrada: document.getElementById('entrada').value,
-        saida: document.getElementById('saida').value || null,
+        id_unidade: document.getElementById('np-id_unidade').value,
+        setor: document.getElementById('np-setor').value,
+        tipo_plantao: document.getElementById('np-tipo_plantao').value,
+        entrada,
+        saida,
         pausas,
       };
 
       const resp = await apiFetch('pedidos.php?acao=registrar', payload);
-      exibirMensagem('mensagem-registro', resp.mensagem, resp.sucesso ? 'sucesso' : 'erro');
 
-      if (resp.sucesso) {
-        document.getElementById('form-registro').reset();
-        document.getElementById('lista-pausas').innerHTML = '';
-        carregarKpis();
-        carregarRecentes();
+      if (!resp.sucesso) {
+        exibirMensagem('mensagem-novo-plantao', resp.mensagem);
+        return;
       }
+
+      document.getElementById('modal-novo-plantao').classList.remove('ativo');
+      carregarKpis();
+      carregarRecentes();
     });
 
     function formatarHoras(valor) {
@@ -287,7 +378,7 @@
     async function carregarUnidades() {
       const resp = await apiFetch('unidades.php?acao=listar');
       if (resp.sucesso) {
-        const select = document.getElementById('id_unidade');
+        const select = document.getElementById('np-id_unidade');
         resp.dados.forEach(u => {
           const opt = document.createElement('option');
           opt.value = u.id_unidade;
